@@ -740,7 +740,7 @@ flowchart TD
   drawCurve(); var rt; addEventListener("resize",function(){clearTimeout(rt);rt=setTimeout(drawCurve,120);});
 
   /* ===== 3D spiral galaxy (raw WebGL) — the still image stays if WebGL is unavailable ===== */
-  (function galaxy(){
+  try{(function galaxy(){
     var land=document.getElementById("landing"), cv=document.getElementById("galaxy");
     var gl=cv.getContext("webgl",{antialias:false,alpha:false,premultipliedAlpha:false});
     if(!gl) return;
@@ -816,10 +816,10 @@ flowchart TD
       if("IntersectionObserver" in window) new IntersectionObserver(function(es){setRun(es[0].isIntersecting&&!document.hidden);}).observe(land);
       document.addEventListener("visibilitychange",function(){setRun(!document.hidden);});
     }
-  })();
+  })();}catch(err){console.warn("galaxy",err);}
 
   /* ===== original-slide viewer ===== */
-  (function viewer(){
+  try{(function viewer(){
     var dlg=document.getElementById("viewer"),img=document.getElementById("vImg"),cnt=document.getElementById("vCount"),strip=document.getElementById("vStrip"),n=1,MAX=37;
     function src(i){return "slides/s-"+(i<10?"0":"")+i+".jpg";}
     function go(i){n=Math.max(1,Math.min(MAX,i));img.src=src(n);img.alt="สไลด์หน้า "+n;cnt.textContent=n+" / "+MAX;
@@ -834,7 +834,46 @@ flowchart TD
     var sx=null,stage=document.getElementById("vStage");
     stage.addEventListener("touchstart",function(e){sx=e.touches[0].clientX;},{passive:true});
     stage.addEventListener("touchend",function(e){if(sx===null)return;var d=e.changedTouches[0].clientX-sx;if(Math.abs(d)>40)go(n+(d<0?1:-1));sx=null;});
-  })();
+  })();}catch(err){console.warn("viewer",err);}
+
+  /* prompt length: zero-shot vs few-shot */
+  try{document.querySelectorAll(".runs").forEach(function(rs){
+    var len=function(p){var c=p.cloneNode(true);c.querySelectorAll(".note,.plen").forEach(function(x){x.remove();});return c.textContent.replace(/[“”"]/g,"").replace(/\s+/g," ").trim().length;};
+    var z=rs.querySelector(".run.z .prompt"),f=rs.querySelector(".run.f .prompt");if(!z||!f)return;
+    var lz=len(z),lf=len(f),x=lf/lz;
+    function tag(p,html){var s=document.createElement("span");s.className="plen";s.innerHTML=html;p.appendChild(s);}
+    tag(z,"<span>ความยาว prompt</span><span><b>"+lz.toLocaleString()+"</b> ตัวอักษร</span>");
+    tag(f,"<span>ความยาว prompt</span><span><b>"+lf.toLocaleString()+"</b> ตัวอักษร"+(x>=1.5?" · ยาวขึ้น <b>"+(x>=10?Math.round(x):x.toFixed(1))+"×</b>":"")+"</span>");
+  });}catch(err){console.warn("plen",err);}
+
+  /* pair rows: zero-shot ↔ few-shot equal heights.
+     CSS subgrid does this natively; this fallback measures and matches rows
+     for browsers without subgrid, and re-runs whenever content changes size. */
+  try{(function pairRows(){
+    var sub=window.CSS&&CSS.supports&&CSS.supports("grid-template-rows","subgrid");
+    if(sub) return;
+    var ROLES=[".run-label",".prompt",".steps","figure,.wave,.deck,.card-text:not(.model)",".outcome"];
+    function kids(run,sel){return Array.prototype.filter.call(run.children,function(c){return c.matches(sel);});}
+    function pair(rs){
+      var z=rs.querySelector(".run.z"),f=rs.querySelector(".run.f");if(!z||!f)return;
+      var all=[];ROLES.forEach(function(r){all=all.concat(kids(z,r),kids(f,r));});
+      all.forEach(function(el){el.style.minHeight="";});
+      if(Math.abs(z.getBoundingClientRect().top-f.getBoundingClientRect().top)>4) return; /* stacked (mobile) */
+      ROLES.forEach(function(r){
+        var a=kids(z,r)[0],b=kids(f,r)[0];if(!a||!b)return;
+        var h=Math.max(a.getBoundingClientRect().height,b.getBoundingClientRect().height);
+        a.style.minHeight=b.style.minHeight=h+"px";
+      });
+    }
+    var runs=document.querySelectorAll(".runs"),q=0;
+    function all(){cancelAnimationFrame(q);q=requestAnimationFrame(function(){runs.forEach(pair);});}
+    all();
+    addEventListener("load",all);addEventListener("resize",all);
+    if(document.fonts&&document.fonts.ready)document.fonts.ready.then(all);
+    document.querySelectorAll(".runs img").forEach(function(i){if(!i.complete)i.addEventListener("load",all);});
+    if(window.MutationObserver)document.querySelectorAll(".diagram").forEach(function(d){new MutationObserver(all).observe(d,{childList:true,subtree:true});});
+    if(window.ResizeObserver){var lastW=0;new ResizeObserver(function(){var w=document.documentElement.clientWidth;if(w!==lastW){lastW=w;all();}}).observe(document.body);}
+  })();}catch(err){console.warn("pairRows",err);}
 
   /* desmos lab */
   var plot=document.getElementById("plot"),sD=document.getElementById("sD"),sK=document.getElementById("sK"),sX=document.getElementById("sX");
